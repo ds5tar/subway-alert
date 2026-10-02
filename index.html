@@ -269,9 +269,7 @@ function arrive(name) {
 
 function onFix(lat, lng, acc) {
   S.me = [lat, lng]; S.acc = acc;
-  const q = acc <= 150 ? 'on' : acc <= 600 ? 'weak' : 'off';
-  $('gpsDot').className = 'dot ' + q;
-  $('gpsText').textContent = `정확도 ±${Math.round(acc)} m`;
+  showAcc(acc);
   const n = nearest(S.me);
   if (acc <= 1000 && n.dist <= S.radius) {
     if (S.cand === n.name) S.candCount++; else { S.cand = n.name; S.candCount = 1; }
@@ -280,7 +278,31 @@ function onFix(lat, lng, acc) {
   drawMe();
 }
 
+function showAcc(acc) {
+  $('gpsDot').className = 'dot ' + (acc <= 150 ? 'on' : acc <= 600 ? 'weak' : 'off');
+  $('gpsText').textContent = `정확도 ±${Math.round(acc)} m`;
+}
+
 // ---------- 위치 ----------
+// 앱을 열면 내 위치를 한 번 찾아 지도 가운데에 두고 가장 가까운 역을 알려 준다 (안내·도착 판정은 하지 않음)
+function locateOnce() {
+  if (!('geolocation' in navigator)) return;
+  $('gpsText').textContent = '위치 찾는 중…';
+  navigator.geolocation.getCurrentPosition(p => {
+    if (S.running) return;   // 이미 안내 중이면 위치 감시가 처리
+    S.me = [p.coords.latitude, p.coords.longitude]; S.acc = p.coords.accuracy;
+    showAcc(S.acc);
+    centerOn(proj(S.me));
+    const n = nearest(S.me), d = n.dist < 1000 ? `${Math.round(n.dist)} m` : `${(n.dist / 1000).toFixed(1)} km`;
+    const prev = $('msg').textContent.startsWith('지난번') ? ' ' + $('msg').textContent : '';
+    $('msg').className = 'msg';
+    $('msg').textContent = `현재 위치를 찾았습니다. 가장 가까운 역은 ${n.name} (${d}).` + prev;
+  }, e => {
+    if (S.running) return;
+    $('gpsDot').className = 'dot off'; $('gpsText').textContent = e.code === 1 ? '위치 권한 없음' : '위치 못 찾음';
+    if (e.code === 1) showErr('위치 권한이 거부되었습니다. 설정에서 위치를 허용하거나 시뮬레이션을 켜 주세요.');
+  }, { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 });
+}
 function startGeo() {
   if (!('geolocation' in navigator)) { showErr('이 브라우저는 위치 기능을 지원하지 않습니다. 시뮬레이션을 켜 주세요.'); return false; }
   S.watchId = navigator.geolocation.watchPosition(
@@ -591,6 +613,7 @@ function loadPrefs() {
 applyView();
 render();
 loadPrefs();
+locateOnce();
 </script>
 
 </body>
